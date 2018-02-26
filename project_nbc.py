@@ -20,6 +20,19 @@ def remove_by_regex(review, regexp):
     p = regex.compile(regexp)
     return p.sub(' ', review)
 
+def remove_data_id(review):
+    return remove_by_regex(review, '"review_id":"[A-Za-z0-9_\-/]+","user_id":"[A-Za-z0-9_\-/]+","business_id":"[A-Za-z0-9_\-/]+",')
+
+def remove_date(review):
+    return remove_by_regex(review, '"date":"[A-Za-z0-9_\-/]+",')
+
+def remove_unecessary_adjectives(review):
+    return remove_by_regex(review, ',"useful":[0-9],"funny":[0-9],"cool":[0-9]')
+
+def remove_new_line(review):
+    return remove_by_regex(review, '\\[a-z]')
+
+'''
 def remove_urls(review):
     return remove_by_regex(review, 'href="[A-Za-z0-9_ :./]+"')
 
@@ -34,6 +47,7 @@ def remove_short_is(review): #it's
 
 def remove_special_chars(review):
     return remove_by_regex(review, "[,:\=&;%$@^*(){}[\]|/><'#.!?\\-]")
+'''
 
 #Remove all the stop words, the punctuation, change uppercase characters to lowercase
 #and remove words that are smaller than 3 characters
@@ -41,11 +55,17 @@ def data_cleaning(X):
     Z = []
     stop_words = set(stopwords.words('english'))
     for comment in X:
+        comment = remove_data_id(comment)
+        comment = remove_date(comment)
+        comment = remove_unecessary_adjectives(comment)
+        comment = remove_new_line(comment)
+        '''
         comment = remove_urls(comment)
         comment = remove_tags(comment)
         comment = remove_symbol_codes(comment)
         comment = remove_short_is(comment)
         comment = remove_special_chars(comment)
+        '''
         comment = comment.lower()
         word_tokens = word_tokenize(comment)
         filtered_comment = [w for w in word_tokens if not w in stop_words]
@@ -84,19 +104,24 @@ def extract_features(document):
 def get_sentiment_distribution(reviews):
     sent1 = 0
     sent2 = 0
+    sent3 = 0
 
     for tuple in reviews:
-        if tuple[1] == False:
+        if tuple[1] == "negative":
             sent1 += 1
-        elif tuple[1] == True:
+        elif tuple[1] == "neutral":
             sent2 += 1
+        elif tuple[1] == "positive":
+            sent3 += 1
     
     score = []
     score.append("negative")
+    score.append("neutral")
     score.append("positive")
     sentiment = []
     sentiment.append(sent1)
     sentiment.append(sent2)
+    sentiment.append(sent3)
 
     with open('sentiment.csv', 'w') as myfile:
         wr = csv.writer(myfile, delimiter=';')
