@@ -4,9 +4,8 @@ from sklearn.neural_network import MLPClassifier
 import re as regex
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-import pandas as pd
 import random
-import csv
+import json
 
 def remove_by_regex(review, regexp):
     p = regex.compile(regexp)
@@ -57,57 +56,87 @@ def get_sentiment_from_score(Y):
     for review in Y:
         if review <= 2 and review >= 0:
             new_Y.append("negative")
+        elif review > 2 and review <= 5:
+            new_Y.append("positive")
+    return new_Y;
+
+def get_sentiment_from_score_neutral(Y):
+    new_Y = []
+    for review in Y:
+        if review <= 2 and review >= 0:
+            new_Y.append("negative")
         elif review == 3:
             new_Y.append("neutral")
         elif review > 3 and review <= 5:
             new_Y.append("positive")
     return new_Y;
 
-reviews_train = pd.read_csv("lab_train.csv", sep=";", usecols=["review", "score"])
-X_train = reviews_train["review"]
-Y_train = get_sentiment_from_score(reviews_train["score"])
-X_train = data_cleaning(X_train)
+# read the entire file into an array of json elements
+array_reviews = []
+with open('reviews_test.json','rb') as file:
+	allData = file.readlines()
+for review in allData:
+	array_reviews.append(json.loads(review))	
 
-'''train_data = []
-for index, comment in enumerate(X_train):
-    tup = (X_train[index], Y_train[index])
-    train_data.append(tup)'''
+# Extract scores and text from reviews
+array_scores = []
+array_text = []
+for review in array_reviews:
+	array_scores.append(review["stars"])
+	array_text.append(review["text"])
 
-reviews_test = pd.read_csv("lab_test.csv", sep=";")
-X_test = reviews_test["review"]
-Y_test = get_sentiment_from_score(reviews_test["score"])
-X_test = data_cleaning(X_test)
+'''X_train = array_text
+Y_train = get_sentiment_from_score(array_scores)
+X_train = data_cleaning(X_train)'''
 
-'''test_data = []
-for index, comment in enumerate(X_test):
-    tup = (X_test[index], Y_test[index])
-    test_data.append(tup)'''
+X = array_text
+Y = get_sentiment_from_score(array_scores) # Only positive and negative labels
+Y_neutral = get_sentiment_from_score_neutral(array_scores) # With neutral label
+X = data_cleaning(X)
+
+# Test our classfier by splitting the data into train (70%) and test (30%) sets
+# (We need to include the validation set)
+
+size1 = (len(X)*70)/100
+size2 = len(X) - size1
+random_train = random.sample(range(0, len(X)), int(size1))
+X_train = []
+Y_train = []
+Y_train_neutral = []
+X_test = []
+Y_test = []
+Y_test_neutral = []
+for number in random_train:
+    X_train.append(X[number])
+    Y_train.append(Y[number])
+    Y_train_neutral.append(Y_neutral[number])
+
+for index, comment in enumerate(Y):
+    if index not in random_train:
+        X_test.append(X[index])
+        Y_test.append(Y[index])
+        Y_test_neutral.append(Y_neutral[index])
 
 # Create feature vectors
 vectorizer = TfidfVectorizer(sublinear_tf=True, use_idf=False)
 X_train = [" ".join(review) for review in X_train]
 X_test = [" ".join(review) for review in X_test]
-#print("Xtrain: ", X_train)
+
 train_vectors = vectorizer.fit_transform(X_train)
-#feature_names(vectorizer)
-
-test_vectors = vectorizer.transform(X_test)
-
-# Scale and normalize the vectors
-from sklearn.preprocessing import StandardScaler
-
-'''scaler = StandardScaler()  
-# Don't cheat - fit only on training data
-scaler.fit(train_vectors)  
-train_vectors = scaler.transform(train_vectors)  
-# apply same transformation to test data
-test_vectors = scaler.transform(test_vectors) ''' 
+test_vectors = vectorizer.transform(X_test) 
 
 # Perform classification with Neural Network
 clf = MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(20,), random_state=1)
 clf.fit(train_vectors, Y_train)
-print(train_vectors[0])
 prediction_nn = clf.predict(test_vectors)
+
+clf.fit(train_vectors, Y_train_neutral)
+prediction_nn_neutral = clf.predict(test_vectors)
 
 print("Results for Neural Network")
 print(classification_report(Y_test, prediction_nn))
+# Good news! We finally have a f1 score for the negative reviews greater than 0.5!
+
+print("Results for Neural Network with neutral label")
+print(classification_report(Y_test_neutral, prediction_nn_neutral))
+# Neutral reviews are not being detected, we have more wrong than right guesses (the f1 score is lower than 0.5)
